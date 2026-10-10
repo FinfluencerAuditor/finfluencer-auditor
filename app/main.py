@@ -18,14 +18,29 @@ async def submit(req:AuditRequest):
     aid=str(uuid.uuid4());queues[aid]=asyncio.Queue();db.save_audit(aid,"","pending",{"audit_id":aid,"status":"pending"})
     async def work():
         def progress(event): queues[aid].put_nowait(event.model_dump(mode="json"))
-        score=await AuditPipeline().run(aid,req.url,progress); tasks[aid]=score
+        try:
+            score=await AuditPipeline().run(aid,req.url,progress); tasks[aid]=score
+            vid = score.metadata.video_id if getattr(score, "metadata", None) else ""
+            st = score.status.value if hasattr(getattr(score, "status", None), "value") else str(getattr(score, "status", "complete"))
+            db.save_audit(aid, vid or "", st, score.model_dump(mode="json"))
+        except Exception as e:
+            err_score={"audit_id":aid,"status":"failed","error":str(e)}
+            tasks[aid]=err_score
+            db.save_audit(aid,"","failed",err_score)
+            queues[aid].put_nowait({"audit_id":aid,"stage":"failed","message":str(e),"progress":1.0})
     asyncio.create_task(work());return {"audit_id":aid,"status":"pending"}
-@app.get("/api/audits/{audit_id}")
-def get_audit(audit_id):
+def _get_audit(audit_id):
     if audit_id in tasks:return tasks[audit_id]
     row=db.load_audit(audit_id)
     if not row:raise HTTPException(404,"Audit not found")
     return json.loads(row["payload_json"])
+@app.get("/api/audits/{audit_id}")
+async def get_audit(audit_id):
+    # Keep this read on the event-loop side of the async audit worker. A sync
+    # route would run in AnyIO's worker thread while the worker writes SQLite,
+    # allowing the process-local DB lock and SQLite's writer lock to wait on
+    # each other during the immediate POST-then-GET lifecycle.
+    return _get_audit(audit_id)
 @app.get("/api/audits/{audit_id}/events")
 async def events(audit_id):
     if audit_id not in queues:raise HTTPException(404,"Audit not found")
@@ -36,7 +51,7 @@ async def events(audit_id):
     return StreamingResponse(stream(),media_type="text/event-stream")
 @app.get("/api/audits/{audit_id}/export")
 def export(audit_id,format="json"):
-    score=get_audit(audit_id)
+    score=_get_audit(audit_id)
     if format=="json":return JSONResponse(score)
     if format!="md":raise HTTPException(400,"format must be json or md")
     lines=[f"# Audit {audit_id}","",f"Status: {score.get('status')}",""]

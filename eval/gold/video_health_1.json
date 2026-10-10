@@ -1,0 +1,29 @@
+{
+  "video_id": "health_gold_1",
+  "title": "Turmeric and Cancer Cure Controversy",
+  "channel": "Holistic Healing Hub",
+  "domain": "health",
+  "gold_claims": [
+    {
+      "start_seconds": 15,
+      "text": "Curcumin has demonstrated anti-inflammatory properties in laboratory and preliminary clinical trials.",
+      "claim_type": "verifiable_fact",
+      "expected_verdict": "Supported",
+      "checkable": true
+    },
+    {
+      "start_seconds": 60,
+      "text": "Drinking turmeric milk completely cures stage 4 cancer in 30 days.",
+      "claim_type": "verifiable_fact",
+      "expected_verdict": "Contradicted",
+      "checkable": true
+    },
+    {
+      "start_seconds": 120,
+      "text": "You will never get sick if you drink this every morning.",
+      "claim_type": "prediction",
+      "expected_verdict": "Unverifiable",
+      "checkable": false
+    }
+  ]
+}

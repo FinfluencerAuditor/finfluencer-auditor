@@ -58,6 +58,7 @@ class Evidence(BaseModel):
 class Judgment(BaseModel):
     claim_id: str; label: VerdictLabel; confidence: str = "Low"; rationale: str
     evidence_ids: list[str] = []
+    analysis_mode: str = "deterministic"
 
 class ClaimResult(BaseModel):
     claim: Claim; evidence: list[Evidence] = []; judgment: Judgment | None = None

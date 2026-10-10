@@ -106,6 +106,8 @@ def ingest(url,serp):
         if tr is None:
             tr = serp.search("youtube_video_transcript",v=vid)
     except SerpApiError as e: raise IngestError("Transcript unavailable for this video.") from e
+    if not isinstance(meta, dict):
+        raise IngestError("Video metadata unavailable.")
     segments = normalize_transcript(tr)
     if not segments: raise IngestError("Transcript unavailable for this video.")
     channel=meta.get("channel",""); channel=channel.get("name","") if isinstance(channel,dict) else str(channel)

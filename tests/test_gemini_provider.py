@@ -68,3 +68,34 @@ def test_non_gemini_provider_names_are_rejected(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "other")
     with pytest.raises(LLMError, match="only gemini"):
         get_provider()
+
+
+def test_gemini_verdict_schema_structured_parsing():
+    from app.judge import LLMVerdictSchema
+    client = FakeClient(['{"label": "Supported", "confidence": "High", "rationale": "Verified by official filings.", "evidence_ids": ["e1"]}'])
+    provider = GeminiProvider(api_key="test-key", client=client)
+    res = provider.structured("judge_claim", "Prompt", LLMVerdictSchema)
+    assert res.label == "Supported"
+    assert res.confidence == "High"
+    assert res.evidence_ids == ["e1"]
+    call = client.models.calls[0]
+    assert call["config"].response_schema["properties"]["label"]["type"] == "string"
+
+
+def test_gemini_error_redaction():
+    class ErrorModels:
+        def generate_content(self, **kwargs):
+            raise RuntimeError("429 RESOURCE_EXHAUSTED: secret-api-key-12345 failed")
+
+    class ErrorClient:
+        def __init__(self):
+            self.models = ErrorModels()
+
+    provider = GeminiProvider(api_key="secret-api-key-12345", client=ErrorClient())
+    with pytest.raises(LLMError) as exc_info:
+        from app.judge import LLMVerdictSchema
+        provider._call("test", LLMVerdictSchema)
+
+    assert "secret-api-key-12345" not in str(exc_info.value)
+    assert "[REDACTED]" in str(exc_info.value)
+    assert "429 RESOURCE_EXHAUSTED" in str(exc_info.value)

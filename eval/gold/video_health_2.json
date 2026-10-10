@@ -1,0 +1,29 @@
+{
+  "video_id": "health_gold_2",
+  "title": "Diabetes Reversal Myths & Facts",
+  "channel": "Health Truths India",
+  "domain": "health",
+  "gold_claims": [
+    {
+      "start_seconds": 20,
+      "text": "Type 2 diabetes can achieve remission through structured diet, weight loss, and lifestyle intervention according to clinical guidelines.",
+      "claim_type": "verifiable_fact",
+      "expected_verdict": "Supported",
+      "checkable": true
+    },
+    {
+      "start_seconds": 75,
+      "text": "Eating karela juice cures type 1 diabetes overnight without insulin.",
+      "claim_type": "verifiable_fact",
+      "expected_verdict": "Contradicted",
+      "checkable": true
+    },
+    {
+      "start_seconds": 130,
+      "text": "Doctors hide this ancient secret from all patients.",
+      "claim_type": "opinion",
+      "expected_verdict": "Unverifiable",
+      "checkable": false
+    }
+  ]
+}

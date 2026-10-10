@@ -1,0 +1,29 @@
+{
+  "video_id": "fin_gold_1",
+  "title": "Nifty 50 Market Crash & Multibagger Tip 2024",
+  "channel": "FinSmart India",
+  "domain": "finance",
+  "gold_claims": [
+    {
+      "start_seconds": 12,
+      "text": "The Nifty 50 fell 10 percent during October 2024.",
+      "claim_type": "statistic",
+      "expected_verdict": "Supported",
+      "checkable": true
+    },
+    {
+      "start_seconds": 45,
+      "text": "Reliance P/E ratio is currently trading at 25.5.",
+      "claim_type": "verifiable_fact",
+      "expected_verdict": "Supported",
+      "checkable": true
+    },
+    {
+      "start_seconds": 110,
+      "text": "This penny stock is guaranteed to give 1000% returns next year.",
+      "claim_type": "prediction",
+      "expected_verdict": "Unverifiable",
+      "checkable": false
+    }
+  ]
+}

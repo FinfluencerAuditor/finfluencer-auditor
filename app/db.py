@@ -12,7 +12,6 @@ def _conn():
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(DB_PATH, check_same_thread=False); c.row_factory = sqlite3.Row
     try:
-        c.execute("PRAGMA journal_mode=WAL")
         yield c
         c.commit()
     except Exception:
@@ -23,6 +22,10 @@ def _conn():
 
 def init_db():
     with _lock, _conn() as c:
+        # Configure WAL once while the database lock is held. Negotiating the
+        # journal mode on every request connection can block when a synchronous
+        # FastAPI handler and an async background task touch SQLite together.
+        c.execute("PRAGMA journal_mode=WAL")
         c.executescript("""
         CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, fetched_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS llm_cache (cache_key TEXT PRIMARY KEY, response_json TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -49,4 +52,18 @@ def save_claim(claim_id, audit_id, payload, state="pending"):
     with _lock, _conn() as c: c.execute("INSERT OR REPLACE INTO claims VALUES (?,?,?,?)",(claim_id,audit_id,json.dumps(payload,ensure_ascii=False),state))
 def list_claims(audit_id):
     with _lock, _conn() as c: return [dict(r) for r in c.execute("SELECT * FROM claims WHERE audit_id=? ORDER BY rowid",(audit_id,))]
+def seed_cache_from_fixtures():
+    fixtures_file = Path(__file__).resolve().parent.parent / "fixtures" / "serp_cache.json"
+    if fixtures_file.exists():
+        try:
+            with open(fixtures_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if cache_get(k) is None:
+                        cache_put(k, v)
+        except Exception:
+            pass
+
 init_db()
+seed_cache_from_fixtures()

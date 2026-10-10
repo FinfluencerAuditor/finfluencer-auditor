@@ -72,7 +72,26 @@ def _gemini_response_schema(model):
             },
             "required": ["index", "normalized_text", "domain", "claim_type", "entities", "checkable"],
         }
-        return {"type": "object", "properties": {"claims": {"type": "array", "items": item}}, "required": ["claims"]}
+    if model.__name__ == "LLMVerdictSchema":
+        return {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "enum": ["Supported", "Contradicted", "Mixed", "No evidence found", "Unverifiable"],
+                },
+                "confidence": {
+                    "type": "string",
+                    "enum": ["Low", "Medium", "High"],
+                },
+                "rationale": {"type": "string"},
+                "evidence_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": ["label", "confidence", "rationale", "evidence_ids"],
+        }
     return model.model_json_schema()
 
 
@@ -101,28 +120,42 @@ class GeminiProvider:
             raise LLMError("GEMINI_API_KEY is not configured")
         if client is None and genai is None:
             raise LLMError("The google-genai package is not installed")
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
         self.timeout = timeout
-        self.client = client or genai.Client(api_key=self.api_key)
+        self.client = client or genai.Client(
+            api_key=self.api_key,
+            http_options=types.HttpOptions(timeout=int(self.timeout * 1000)),
+        )
 
     def _call(self, prompt, schema):
-        try:
-            config = types.GenerateContentConfig(
-                temperature=0,
-                response_mime_type="application/json",
-                response_schema=_gemini_response_schema(schema),
-            )
-            response = self.client.models.generate_content(model=self.model, contents=prompt, config=config)
-            content = getattr(response, "text", None)
-            if not content and getattr(response, "parsed", None) is not None:
-                content = json.dumps(response.parsed, ensure_ascii=False)
-            if not content:
-                raise LLMError("Gemini returned an empty structured response")
-            return content
-        except LLMError:
-            raise
-        except Exception as exc:
-            raise LLMError(f"Gemini request failed: {type(exc).__name__}") from exc
+        import time
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                config = types.GenerateContentConfig(
+                    temperature=0,
+                    response_mime_type="application/json",
+                    response_schema=_gemini_response_schema(schema),
+                )
+                response = self.client.models.generate_content(model=self.model, contents=prompt, config=config)
+                content = getattr(response, "text", None)
+                if not content and getattr(response, "parsed", None) is not None:
+                    content = json.dumps(response.parsed, ensure_ascii=False)
+                if not content:
+                    raise LLMError("Gemini returned an empty structured response")
+                return content
+            except LLMError:
+                raise
+            except Exception as exc:
+                err_msg = str(exc)
+                if self.api_key and self.api_key in err_msg:
+                    err_msg = err_msg.replace(self.api_key, "[REDACTED]")
+                is_quota = "RESOURCE_EXHAUSTED" in err_msg or ("429" in err_msg and "quota" in err_msg.lower())
+                is_transient = "503" in err_msg or "UNAVAILABLE" in err_msg or "500" in err_msg or "temporary" in err_msg.lower()
+                if attempt < max_retries and is_transient and not is_quota:
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                raise LLMError(f"Gemini request failed ({type(exc).__name__}): {err_msg}") from exc
 
     def structured(self, operation, prompt, schema):
         key = hashlib.sha256(("gemini" + self.model + operation + prompt + schema.__name__).encode()).hexdigest()
@@ -152,4 +185,12 @@ def get_provider():
     provider = os.getenv("LLM_PROVIDER", "gemini").lower()
     if provider != "gemini":
         raise LLMError(f"Unsupported LLM_PROVIDER: {provider}; only gemini is supported")
-    return GeminiProvider()
+    timeout = _bounded_timeout(os.getenv("GEMINI_TIMEOUT_SECONDS", "120"))
+    return GeminiProvider(timeout=timeout)
+
+
+def _bounded_timeout(raw):
+    try:
+        return max(1, min(300, int(raw)))
+    except (TypeError, ValueError):
+        return 120

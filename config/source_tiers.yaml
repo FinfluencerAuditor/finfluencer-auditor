@@ -1,10 +1,152 @@
-tier_1:
-  - regulators
-  - government
-  - health bodies
-  - peer-reviewed papers
-  - exchange filings
-tier_2:
-  - established news outlets
-tier_3:
-  - other sources
+# Source Tier Classification for Finfluencer & Health-Claim Auditor
+# Tier 1: Regulators, Government, Health Bodies, Peer-reviewed Journals, Official Filings & Exchanges
+# Tier 2: Established Financial & Mainstream News Outlets, Recognized Medical Encyclopedias
+# Tier 3: Blogs, Forums, Social Platforms, Aggregators, and Unverified Websites
+
+tier_1_domains:
+  # Indian Government & Regulators
+  - "sebi.gov.in"
+  - "rbi.org.in"
+  - "nseindia.com"
+  - "bseindia.com"
+  - "amfiindia.com"
+  - "mca.gov.in"
+  - "incometaxindia.gov.in"
+  - "finmin.nic.in"
+  - "pib.gov.in"
+  - "india.gov.in"
+  - "gov.in"
+  - "nic.in"
+  
+  # Indian Health & Medical Bodies
+  - "mohfw.gov.in"
+  - "icmr.gov.in"
+  - "fssai.gov.in"
+  - "aiims.edu"
+  - "ayush.gov.in"
+  
+  # Global Regulators & International Authorities
+  - "who.int"
+  - "nih.gov"
+  - "cdc.gov"
+  - "fda.gov"
+  - "sec.gov"
+  - "bis.org"
+  - "imf.org"
+  - "worldbank.org"
+  
+  # Peer-Reviewed Scientific & Medical Journals
+  - "nature.com"
+  - "thelancet.com"
+  - "bmj.com"
+  - "jamanetwork.com"
+  - "nejm.org"
+  - "sciencedirect.com"
+  - "springer.com"
+  - "wiley.com"
+  - "cell.com"
+  - "ncbi.nlm.nih.gov"
+  - "pubmed.ncbi.nlm.nih.gov"
+  - "cochranelibrary.com"
+  - "frontiersin.org"
+  - "biorxiv.org"
+  - "medrxiv.org"
+  - "oup.com"
+  - "tandfonline.com"
+  - "plos.org"
+  - "pnas.org"
+  # Established museums, universities, archives, and historical collections
+  - "si.edu"
+  - "smithsonianmag.com"
+  - "metmuseum.org"
+  - "rijksmuseum.nl"
+  - "britishmuseum.org"
+  - "loc.gov"
+  - "nationalarchives.gov.uk"
+  - "archives.gov"
+  - "history.org"
+  - "jstor.org"
+  - "harvard.edu"
+  - "yale.edu"
+  - "ox.ac.uk"
+  - "cam.ac.uk"
+  - "uchicago.edu"
+  - "stanford.edu"
+  - "amsterdam.nl"
+  - "huygens.knaw.nl"
+  - "dbnl.org"
+  - "eh.net"
+  - "nber.org"
+  # Central banks and official financial records
+  - "bankofengland.co.uk"
+  - "ecb.europa.eu"
+  - "federalreserve.gov"
+  - "fred.stlouisfed.org"
+  - "federalreservehistory.org"
+  - "history.state.gov"
+
+tier_2_domains:
+  # Major Financial & Business News (India & Global)
+  - "moneycontrol.com"
+  - "economictimes.indiatimes.com"
+  - "livemint.com"
+  - "business-standard.com"
+  - "financialexpress.com"
+  - "thehindubusinessline.com"
+  - "bloomberg.com"
+  - "reuters.com"
+  - "cnbctv18.com"
+  - "ndtvprofit.com"
+  - "wsj.com"
+  - "ft.com"
+  - "forbes.com"
+  - "cnbc.com"
+  - "marketwatch.com"
+  - "investopedia.com"
+  - "zeebiz.com"
+  - "fortune.com"
+  - "barrons.com"
+  - "morningstar.com"
+  
+  # Major Reputable General News Outlets
+  - "thehindu.com"
+  - "indianexpress.com"
+  - "ndtv.com"
+  - "bbc.com"
+  - "bbc.co.uk"
+  - "timesofindia.indiatimes.com"
+  - "hindustantimes.com"
+  - "thewire.in"
+  - "scroll.in"
+  - "aljazeera.com"
+  - "theguardian.com"
+  - "apnews.com"
+  - "washingtonpost.com"
+  - "nytimes.com"
+  
+  # Established Medical & Health Institutions / Portals
+  - "mayoclinic.org"
+  - "clevelandclinic.org"
+  - "hopkinsmedicine.org"
+  - "webmd.com"
+  - "healthline.com"
+  - "medicalnewstoday.com"
+  - "health.harvard.edu"
+  - "nhs.uk"
+
+tier_3_domains:
+  # Social Platforms, Blogs, Aggregators, Video Channels
+  - "youtube.com"
+  - "youtu.be"
+  - "twitter.com"
+  - "x.com"
+  - "reddit.com"
+  - "quora.com"
+  - "medium.com"
+  - "substack.com"
+  - "blogspot.com"
+  - "wordpress.com"
+  - "tumblr.com"
+  - "facebook.com"
+  - "instagram.com"
+  - "linkedin.com"

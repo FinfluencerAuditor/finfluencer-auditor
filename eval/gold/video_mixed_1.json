@@ -1,0 +1,29 @@
+{
+  "video_id": "mixed_gold_1",
+  "title": "Wealth & Wellness Mastery Course",
+  "channel": "Life & Money Guru",
+  "domain": "other",
+  "gold_claims": [
+    {
+      "start_seconds": 18,
+      "text": "RBI increased the benchmark repo rate to 6.5% during the policy meeting.",
+      "claim_type": "statistic",
+      "expected_verdict": "Supported",
+      "checkable": true
+    },
+    {
+      "start_seconds": 65,
+      "text": "My proprietary trading course guarantees 50% monthly profit risk free.",
+      "claim_type": "prediction",
+      "expected_verdict": "Unverifiable",
+      "checkable": false
+    },
+    {
+      "start_seconds": 125,
+      "text": "Alien frequency vibrations cure kidney disease without medicine.",
+      "claim_type": "verifiable_fact",
+      "expected_verdict": "No evidence found",
+      "checkable": true
+    }
+  ]
+}

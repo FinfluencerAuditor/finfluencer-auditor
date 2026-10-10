@@ -1,1 +1,85 @@
-<!doctype html><html><body><h1>Finfluencer &amp; Health-Claim Auditor</h1><p>Frontend implementation is reserved for Person C.</p></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Finfluencer &amp; Health-Claim Auditor: evidence-based finance and health claim auditing for public YouTube videos.">
+  <title>Finfluencer &amp; Health-Claim Auditor</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="Finfluencer &amp; Health-Claim Auditor home">
+        <span class="brand-mark" aria-hidden="true">FH</span>
+        <span><strong>Finfluencer &amp; Health-Claim Auditor</strong><small>finance &amp; health claim auditor</small></span>
+      </a>
+      <div class="live-status" id="health-status" aria-live="polite"><span class="status-dot"></span> Checking service…</div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">Evidence, timestamp by timestamp</p>
+      <h1 id="page-title">See what a video’s claims are actually supported by.</h1>
+      <p class="hero-copy">Paste a public YouTube link. Finfluencer &amp; Health-Claim Auditor extracts actionable finance and health statements, then shows the evidence retrieved for each one.</p>
+      <form id="audit-form" class="audit-form" novalidate>
+        <label for="youtube-url">Public YouTube URL</label>
+        <div class="input-row">
+          <input id="youtube-url" name="url" type="url" inputmode="url" autocomplete="url" placeholder="https://www.youtube.com/watch?v=…" required>
+          <button class="button button-primary" type="submit" id="audit-button"><span>Audit video</span><span class="button-arrow" aria-hidden="true">→</span></button>
+        </div>
+        <p class="field-hint">Watch, Shorts, live, and youtu.be links are supported.</p>
+        <p class="field-error" id="form-error" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section id="workspace" class="workspace" aria-live="polite">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon" aria-hidden="true">✦</div>
+        <h2>Your scorecard will appear here</h2>
+        <p>Start with a public video URL. Results are saved locally in this browser so you can return to an audit after a refresh.</p>
+      </div>
+
+      <div id="progress-panel" class="progress-panel" hidden>
+        <div class="section-kicker">Live audit</div>
+        <div class="progress-heading"><h2 id="progress-title">Preparing your audit</h2><span id="progress-value">Waiting</span></div>
+        <div class="progress-track" aria-hidden="true"><div id="progress-bar" class="progress-bar"></div></div>
+        <p id="progress-message" class="muted">Connecting to the audit pipeline…</p>
+        <div id="recovery-note" class="recovery-note" hidden></div>
+      </div>
+
+      <div id="error-panel" class="error-panel" role="alert" hidden>
+        <div class="error-icon" aria-hidden="true">!</div>
+        <div><h2 id="error-title">Audit could not be completed</h2><p id="error-message"></p><button class="button button-secondary" id="retry-button" type="button">Try again</button></div>
+      </div>
+
+      <article id="results-panel" hidden>
+        <div class="results-toolbar">
+          <div><div class="section-kicker">Audit scorecard</div><h2 id="result-title">Results</h2><p id="result-subtitle" class="muted"></p></div>
+          <div class="export-actions" id="export-actions" hidden>
+            <a class="button button-secondary" id="export-json" href="#">Export JSON</a>
+            <a class="button button-secondary" id="export-md" href="#">Export Markdown</a>
+          </div>
+        </div>
+        <div id="summary-cards" class="summary-grid"></div>
+        <div id="audit-warning" class="audit-warning" hidden></div>
+        <div class="claims-toolbar">
+          <div><h3>Claims</h3><span id="claim-count" class="muted"></span></div>
+          <div class="filters">
+            <label class="search-label" for="claim-search">Search claims</label>
+            <input id="claim-search" type="search" placeholder="Search text, source, or domain…">
+            <label class="sr-only" for="verdict-filter">Filter by verdict</label>
+            <select id="verdict-filter"><option value="all">All verdicts</option></select>
+          </div>
+        </div>
+        <div id="claims-list" class="claims-list"></div>
+        <div id="claims-empty" class="filtered-empty" hidden>No claims match these filters.</div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer"><p><strong>Important:</strong> Finfluencer &amp; Health-Claim Auditor provides evidence-based analysis, not medical or financial advice. Results reflect retrieved evidence at the time of the audit and may be incomplete or wrong.</p></footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "video_id": "fin_gold_2",
+  "title": "SEBI New Regulations and Banking Stock Analysis",
+  "channel": "Market Pulse Daily",
+  "domain": "finance",
+  "gold_claims": [
+    {
+      "start_seconds": 25,
+      "text": "SEBI introduced stricter index derivatives rules with 15 lakh minimum lot size.",
+      "claim_type": "verifiable_fact",
+      "expected_verdict": "Supported",
+      "checkable": true
+    },
+    {
+      "start_seconds": 80,
+      "text": "HDFC Bank dividend yield is 50 percent.",
+      "claim_type": "statistic",
+      "expected_verdict": "Contradicted",
+      "checkable": true
+    },
+    {
+      "start_seconds": 150,
+      "text": "Every investor must buy this banking stock before Friday.",
+      "claim_type": "advice",
+      "expected_verdict": "Unverifiable",
+      "checkable": false
+    }
+  ]
+}
