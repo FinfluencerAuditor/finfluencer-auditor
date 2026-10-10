@@ -1,283 +1,487 @@
 # Finfluencer & Health-Claim Auditor
 
-Finfluencer & Health-Claim Auditor is a FastAPI application that audits claims made in public YouTube videos. It ingests video metadata and timestamped transcript segments, extracts a small set of finance, health, and other factual propositions, retrieves relevant evidence, and presents a claim-by-claim scorecard.
+**Evidence-first auditing of finance, health, and other factual claims in public YouTube videos.**
 
-The application is evidence-first: it records when evidence is unavailable, marks predictions and opinions as `Unverifiable`, cites only evidence returned by the retrieval layer, and does not score or profile creators.
+Finfluencer & Health-Claim Auditor is a FastAPI application that analyzes public YouTube videos and produces a timestamped, claim-by-claim evidence scorecard. It combines transcript ingestion, structured claim extraction, targeted web research, source-quality classification, numeric comparisons, and conservative verdict validation.
 
-## Problem statement and goals
+Instead of assigning a simplistic truth score to an entire video, the application examines individual statements, preserves their original context, identifies relevant evidence, and makes missing evidence visible.
 
-Finance and health videos often combine factual statements with forecasts, recommendations, personal opinions, statistics, and high-risk language. A viewer needs to know which statements are checkable, what was said and when, what sources were found, and how strongly those sources support the statement.
+**Core principles**
+- Analyze claims, not creators.
+- Preserve original wording and timestamps.
+- Distinguish checkable facts from predictions, opinions, advice, and testimonials.
+- Cite only evidence returned by the retrieval pipeline.
+- Treat missing evidence as insufficient evidence, not proof of falsity.
+- Use conservative verdicts when evidence or the configured language model is unavailable.
 
-The project aims to:
+## Table of contents
 
-- preserve the original quote and timestamp while providing an English claim representation;
-- distinguish checkable factual claims from predictions, opinions, advice, and testimonials;
-- retrieve relevant finance, health, news, scholarly, and general web evidence;
-- apply source tiers and conservative verdict validation;
-- make missing evidence visible instead of treating it as proof that a claim is false; and
-- provide a local browser interface plus JSON and Markdown exports.
+- [Quick start](#quick-start)
+- [Problem statement and goals](#problem-statement-and-goals)
+- [Key features](#key-features)
+- [How it works](#how-it-works)
+- [Technology stack](#technology-stack)
+- [Project architecture](#project-architecture)
+- [Prerequisites](#prerequisites)
+- [Installation and configuration](#installation-and-configuration)
+- [Running the application](#running-the-application)
+- [Tests and evaluation](#tests-and-evaluation)
+- [API reference](#api-reference)
+- [Evidence retrieval and scoring](#evidence-retrieval-and-scoring)
+- [Example workflow](#example-workflow)
+- [Troubleshooting](#troubleshooting)
+- [Security, privacy, and responsible use](#security-privacy-and-responsible-use)
+- [Limitations and future work](#limitations-and-future-work)
+- [License](#license)
 
-## Key features
+## Quick start
 
-- Accepts public YouTube watch, Shorts, live, and `youtu.be` URLs with valid 11-character video IDs.
-- Fetches YouTube metadata and transcript data through SerpApi, retaining transcript timestamps and original wording.
-- Uses Gemini structured output when configured to extract complete propositions, domains, claim types, entities, numeric expressions, and risk flags.
-- Supports English, Hindi, and mixed Hindi-English/Hinglish transcript cases covered by the local tests. Other languages depend on usable transcript data and successful normalization.
-- Falls back conservatively when the LLM is unavailable or structured output is invalid.
-- Caps the final extracted shortlist at eight deduplicated claims.
-- Routes retrieval by domain: finance uses Google Finance, Google News, and Google; health uses Google Scholar, Google News, and Google; other claims use Google News and Google.
-- Retrieves, filters, deduplicates, ranks, and returns up to five evidence items per claim.
-- Performs deterministic numeric comparisons when a claim and evidence contain comparable numeric values.
-- Produces `Supported`, `Contradicted`, `Mixed`, `No evidence found`, or `Unverifiable` verdicts with low, medium, or high confidence and a neutral rationale.
-- Streams audit progress over Server-Sent Events (SSE), persists audits and caches in SQLite, and supports JSON/Markdown export.
-- Includes an offline/demo mode that reads cached responses only; it does not fabricate fixture responses.
+### Requirements
 
-## How the application works
+- Python 3.11 or newer, subject to dependency compatibility.
+- A SerpApi API key for uncached live YouTube and evidence requests.
+- A Gemini API key for the configured LLM extraction and judgment workflow.
+- Node.js 18 or newer only if you want to run the JavaScript tests.
 
-1. The browser sends a YouTube URL to `POST /api/audits`. The API immediately creates an audit ID and returns HTTP `202` with status `pending`.
-2. A background task ingests metadata and transcript segments through `app/ingest.py`.
-3. `app/extract.py` chunks timestamped transcript segments, extracts and normalizes complete claims, removes duplicates, and keeps the highest-priority eight.
-4. For every checkable claim, `app/retrieve.py` creates up to three targeted search requests, parses engine-specific responses, applies relevance checks and source tiers, and keeps at most five evidence records.
-5. `app/numeric.py` checks comparable numeric claims. `app/judge.py` then applies deterministic rules and, when available, asks Gemini for a structured judgment restricted to the retrieved evidence.
-6. Judgment validation removes invalid citation IDs and downgrades unsupported labels. The completed scorecard is saved in SQLite and can be read through the API.
-7. The frontend listens to `/events`, falls back to polling when SSE is unavailable, renders claim cards and evidence, and links to JSON and Markdown exports.
-
-## Technology stack
-
-- Python 3.11 or newer (the current environment is Python 3.14.4)
-- FastAPI, Pydantic v2, Uvicorn, and `python-dotenv`
-- SQLite for audit, claim, LLM, and SerpApi response persistence/cache
-- SerpApi via `requests` for YouTube data and evidence search
-- Google Gemini via the `google-genai` package for structured extraction and optional judgment
-- Vanilla HTML, CSS, and JavaScript frontend served by FastAPI
-- Pytest for Python tests and Node's built-in test runner for frontend utility tests
-
-## Project architecture
-
-```text
-.
-├── app/
-│   ├── main.py          FastAPI app, routes, SSE, exports, static-file mounting
-│   ├── schemas.py       Pydantic request, transcript, claim, evidence, and scorecard models
-│   ├── pipeline.py      Async audit orchestration and progress events
-│   ├── ingest.py        YouTube URL parsing, metadata, and transcript normalization
-│   ├── extract.py       Timestamp-aware claim extraction and normalization
-│   ├── retrieve.py      Query drafting, search parsing, relevance, and evidence ranking
-│   ├── judge.py         Verdict generation and citation/source-tier validation
-│   ├── numeric.py       Numeric expression extraction and comparison
-│   ├── serp.py          SerpApi client, retries, deterministic cache keys, and demo mode
-│   ├── llm.py           Gemini provider and structured-output handling
-│   ├── source_tiers.py  Domain-to-tier classification
-│   └── db.py            SQLite schema, persistence, and cache helpers
-├── config/source_tiers.yaml  Configured Tier 1–3 domains
-├── web/                 Browser UI, styles, frontend utilities, and JS tests
-├── tests/               Python unit, API, pipeline, retrieval, and regression tests
-├── fixtures/            Cached SerpApi responses and transcript fixtures used by tests/demo work
-├── eval/                Offline gold data, evaluation script, and results report
-├── scripts/             Small maintenance/demo scripts
-├── requirements.txt     Python dependencies
-├── .env.example         Environment-variable template
-└── pytest.ini           Pytest configuration
-```
-
-The SQLite database defaults to `data/auditor.sqlite3`. Database files are ignored by Git. The frontend is mounted from `web/` by `app/main.py` when that directory exists.
-
-## Prerequisites
-
-On Ubuntu/Linux, install:
-
-- Python 3.11 or newer;
-- `python3-venv` and `python3-pip`;
-- Node.js 18 or newer only if you want to run the JavaScript tests; and
-- Gemini and SerpApi credentials for live audits.
-
-For Ubuntu, the system packages can be installed with:
+### 1. Clone the repository
 
 ```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip nodejs npm
+git clone https://github.com/FinfluencerAuditor/finfluencer-auditor.git
+cd finfluencer-auditor
 ```
 
-The application itself has no `package.json`; JavaScript tests use Node's built-in test runner, so no `npm install` is required for the current frontend.
-
-## Installation and setup on Ubuntu/Linux
-
-From the repository root:
+### 2. Install dependencies
 
 ```bash
-cd ~/proj-work-serpapi
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+
+```bash
 cp .env.example .env
 ```
 
-Edit `.env` locally and add your own credentials. Never commit `.env` or paste credentials into issue reports, README files, logs, or shell history. `.env` is ignored by Git; `.env.example` contains blank credential fields.
+Edit `.env` locally and provide your own Gemini and SerpApi credentials. Never commit `.env` or share API keys in source code, screenshots, logs, or issue reports.
 
-## Environment variables
-
-The complete template is [`.env.example`](./.env.example). The application reads these variables:
-
-| Variable | Purpose | Default/notes |
-| --- | --- | --- |
-| `LLM_PROVIDER` | Selects the LLM provider | Defaults to `gemini`; the current code supports Gemini only |
-| `GEMINI_API_KEY` | Gemini authentication | Required for live LLM extraction/judging |
-| `GEMINI_MODEL` | Gemini model name | Defaults to `gemini-3.5-flash`; choose a model available to your account |
-| `SERPAPI_API_KEY` | SerpApi authentication | Required for uncached live metadata, transcript, and evidence requests |
-| `DEMO_MODE` | Restricts SerpApi to the local cache | `0` by default; set to `1` to prevent live SerpApi calls |
-| `AUDITOR_DB_PATH` | SQLite database path | Defaults to `data/auditor.sqlite3` |
-
-A configured Gemini key is required for the full configured extraction/judgment path, but the pipeline can use its conservative deterministic fallbacks when a provider is unavailable. `DEMO_MODE=1` still requires matching cached responses for the requested engine and parameters; it does not create synthetic results.
-
-## Run the application locally
-
-With the virtual environment active and `.env` configured:
+### 4. Start the application
 
 ```bash
-cd ~/proj-work-serpapi
+uvicorn app.main:app --reload
+```
+
+Open **http://127.0.0.1:8000/** in your browser.
+
+Check the service health at **http://127.0.0.1:8000/api/health**.
+
+To use port 8011 instead:
+
+```bash
+uvicorn app.main:app --reload --port 8011
+```
+
+Then open http://127.0.0.1:8011/.
+
+## Problem statement and goals
+
+Finance and health videos frequently combine verifiable statements with forecasts, recommendations, personal opinions, statistics, and high-risk claims. Viewers need a way to identify what was actually said, when it was said, which sources are relevant, and how strongly those sources support the statement.
+
+This project aims to:
+
+- Preserve original quotations and timestamps while providing a normalized English representation when reliable normalization is possible.
+- Distinguish factual claims from predictions, opinions, advice, testimonials, and other non-checkable statements.
+- Retrieve relevant financial, news, scholarly, health, and general web evidence.
+- Classify sources into configurable quality tiers.
+- Apply numeric comparisons and conservative verdict validation.
+- Expose missing or insufficient evidence rather than silently treating it as confirmation or contradiction.
+- Provide a browser-based interface and JSON and Markdown exports.
+
+## Key features
+
+- **YouTube ingestion:** Accepts public YouTube watch, Shorts, live, and `youtu.be` URLs with valid 11-character video IDs.
+- **Timestamped transcripts:** Retrieves metadata and transcript data through SerpApi and preserves transcript timestamps and original wording.
+- **Structured claim extraction:** Uses Gemini structured output when configured to identify complete propositions, domains, claim types, entities, numeric expressions, and risk flags.
+- **Multilingual handling:** Supports English, Hindi, and mixed Hindi-English/Hinglish cases covered by the local tests. Other languages depend on transcript availability and successful normalization.
+- **Conservative fallback behavior:** Continues with deterministic fallbacks when the LLM is unavailable or its structured output is invalid.
+- **Bounded claim selection:** Keeps a final shortlist of up to eight deduplicated claims.
+- **Domain-aware retrieval:** Selects search engines according to claim domain and type, rather than applying the same financial search strategy to every finance-related statement.
+- **Evidence filtering and ranking:** Filters, deduplicates, and ranks retrieved evidence before it reaches the judging stage.
+- **Numeric verification:** Compares compatible numeric expressions when the claim and evidence contain comparable values.
+- **Conservative verdicts:** Produces Supported, Contradicted, Mixed, No evidence found, or Unverifiable labels with confidence levels and rationales.
+- **Live progress:** Streams audit progress using Server-Sent Events (SSE), with frontend polling as a fallback.
+- **Persistent results:** Stores audits and cache entries in SQLite.
+- **Export support:** Offers JSON and Markdown scorecard exports.
+- **Offline/demo mode:** Uses matching cached SerpApi responses without making live SerpApi requests or fabricating fixture results.
+- **Automated tests:** Includes Python tests and JavaScript utility tests.
+
+## How it works
+
+1. The browser submits a public YouTube URL to `POST /api/audits`.
+2. The API creates an audit identifier and returns HTTP 202 with a pending status.
+3. `app/ingest.py` retrieves video metadata and transcript segments through SerpApi.
+4. `app/extract.py` processes timestamped transcript segments, extracts complete claims, normalizes them, removes duplicates, and selects the highest-priority claims.
+5. Checkable claims are passed to `app/retrieve.py`, which generates targeted queries, calls the configured search engines, parses responses, applies relevance checks, and ranks eligible evidence.
+6. `app/numeric.py` performs deterministic comparisons where numeric expressions can be compared meaningfully.
+7. `app/judge.py` applies deterministic verdict rules and, when available, requests a structured judgment from Gemini using the retrieved evidence.
+8. Validation removes invalid evidence references and downgrades unsupported verdicts.
+9. The completed scorecard is persisted in SQLite and returned through the API.
+10. The frontend displays the claim-by-claim results, listens for progress events, and provides export options.
+
+## Technology stack
+
+| Component | Technology |
+|---|---|
+| Backend | Python, FastAPI, Uvicorn |
+| Validation and schemas | Pydantic v2 |
+| Transcript and evidence retrieval | SerpApi via `requests` |
+| LLM | Google Gemini through `google-genai` |
+| Persistence and caching | SQLite |
+| Configuration | `python-dotenv` |
+| Frontend | HTML, CSS, vanilla JavaScript |
+| Backend tests | Pytest |
+| Frontend tests | Node.js built-in test runner |
+
+## Project architecture
+
+```text
+finfluencer-auditor/
+├── app/
+│   ├── main.py          # FastAPI routes, SSE, exports, static files
+│   ├── schemas.py       # Request, transcript, claim, evidence, scorecard models
+│   ├── pipeline.py      # Asynchronous audit orchestration and progress
+│   ├── ingest.py        # URL parsing, metadata, transcript normalization
+│   ├── extract.py       # Timestamp-aware claim extraction and normalization
+│   ├── retrieve.py      # Query drafting, search parsing, evidence ranking
+│   ├── judge.py         # Verdict generation and evidence validation
+│   ├── numeric.py       # Numeric expression extraction and comparison
+│   ├── serp.py          # SerpApi client, retries, caching, demo mode
+│   ├── llm.py           # Gemini provider and structured-output handling
+│   ├── source_tiers.py  # Source-tier classification
+│   └── db.py            # SQLite persistence and cache helpers
+├── config/
+│   └── source_tiers.yaml
+├── web/                 # Browser interface, styles, frontend utilities
+├── tests/               # Unit, API, pipeline, retrieval, regression tests
+├── fixtures/            # Cached responses and test/demo fixtures
+├── eval/                # Offline evaluation and benchmark scripts
+├── scripts/             # Maintenance and demonstration scripts
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── pytest.ini
+```
+
+The default SQLite database path is `data/auditor.sqlite3`. Database files should remain local and ignored by Git. The frontend is served by `app/main.py` when the `web/` directory is present.
+
+## Prerequisites
+
+On Ubuntu/Linux, install Python, virtual-environment support, and pip:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip
+```
+
+Install Node.js 18 or newer if you want to run the frontend tests. The frontend currently uses Node's built-in test runner and does not require a `package.json` or an `npm install` step.
+
+## Installation and configuration
+
+### Environment variables
+
+The `.env.example` file documents the supported environment variables.
+
+| Variable | Purpose |
+|---|---|
+| `LLM_PROVIDER` | Selects the LLM provider; the current implementation supports Gemini. |
+| `GEMINI_API_KEY` | Gemini authentication for the configured LLM workflow. |
+| `GEMINI_MODEL` | Gemini model identifier configured for the application. |
+| `SERPAPI_API_KEY` | SerpApi authentication for uncached live requests. |
+| `DEMO_MODE` | Set to `1` to disable live SerpApi requests and use matching cached responses only. |
+| `AUDITOR_DB_PATH` | SQLite database path; defaults to `data/auditor.sqlite3`. |
+
+The example environment template supplies the current configured defaults. Check `.env.example` and `app/llm.py` for the exact Gemini model identifier used by your checkout.
+
+A Gemini key is required for the configured live LLM workflow. If Gemini is unavailable, the pipeline can use conservative deterministic fallbacks, but results may be less complete.
+
+A SerpApi key is required for uncached live metadata, transcript, and evidence requests. In demo mode, matching cached responses must exist for the requested engine and parameters; the application does not generate synthetic search results.
+
+## Running the application
+
+Activate the virtual environment and start the server:
+
+```bash
 source .venv/bin/activate
 uvicorn app.main:app --reload
 ```
 
-Open <http://127.0.0.1:8000/> in a browser. Check the service with:
+Open http://127.0.0.1:8000/ and check the service:
 
 ```bash
 curl http://127.0.0.1:8000/api/health
 ```
 
-The health response includes `status`, the selected `llm_provider`, and whether `demo_mode` is enabled. Stop the server with `Ctrl+C`.
+The health endpoint reports the service status, selected LLM provider, and demo-mode state.
 
-## Tests
+Stop the development server with `Ctrl+C`.
 
-Run the Python suite from the repository root:
+## Tests and evaluation
+
+Run the Python test suite:
 
 ```bash
 source .venv/bin/activate
 python -m pytest -q
 ```
 
-Run the JavaScript tests with Node's built-in runner:
+Run the JavaScript tests:
 
 ```bash
 node --test web/app.test.mjs
 ```
 
-The Python tests use temporary database paths through `tests/conftest.py` and mock external services, so the suite does not require live API calls. The evaluation script is a separate offline check and writes `eval/results.md`:
+The Python tests use isolated or temporary database paths and mock external services where appropriate, so the unit and regression suite should not require live API calls.
+
+The latest local test run during development completed with **153 tests passing**. This is a test-suite result, not a claim of 100% real-world fact-checking accuracy.
+
+Run the offline evaluation script separately:
 
 ```bash
 python eval/run_eval.py
 ```
 
-## API endpoints
+The evaluation script writes its report to `eval/results.md`. Evaluation results depend on the test cases and criteria included in the repository and should not be interpreted as a guarantee of real-world accuracy.
 
-All application API routes are defined in [`app/main.py`](./app/main.py).
+## API reference
+
+Application routes are defined in `app/main.py`.
 
 | Method and path | Behavior |
-| --- | --- |
-| `GET /api/health` | Returns service status, configured provider name, and demo-mode state. |
-| `POST /api/audits` | Accepts JSON such as `{"url":"https://youtu.be/dQw4w9WgXcQ"}` and returns HTTP `202` with `{"audit_id":"...","status":"pending"}`. |
-| `GET /api/audits/{audit_id}` | Returns the saved pending, complete, or failed audit scorecard. Unknown IDs return `404`. |
-| `GET /api/audits/{audit_id}/events` | Streams progress events as `text/event-stream` until a `complete` or `failed` event. |
-| `GET /api/audits/{audit_id}/export?format=json` | Returns the scorecard as JSON. |
-| `GET /api/audits/{audit_id}/export?format=md` | Returns a Markdown export containing status, claim text, verdict, and timestamp. Other formats return `400`. |
+|---|---|
+| `GET /api/health` | Returns service status, configured provider, and demo-mode state. |
+| `POST /api/audits` | Accepts a video URL and creates a pending audit. |
+| `GET /api/audits/{audit_id}` | Returns the saved audit status and scorecard. Unknown IDs return 404. |
+| `GET /api/audits/{audit_id}/events` | Streams audit progress as `text/event-stream`. |
+| `GET /api/audits/{audit_id}/export?format=json` | Exports the scorecard as JSON. |
+| `GET /api/audits/{audit_id}/export?format=md` | Exports a compact Markdown scorecard. Unsupported formats return 400. |
 
-Example request:
+### Example API request
+
+Submit a video for auditing:
 
 ```bash
 AUDIT_ID=$(curl -sS -X POST http://127.0.0.1:8000/api/audits \
   -H 'Content-Type: application/json' \
-  -d '{"url":"https://youtu.be/dQw4w9WgXcQ"}' | python -c 'import json,sys; print(json.load(sys.stdin)["audit_id"])')
+  -d '{"url":"https://youtu.be/dQw4w9WgXcQ"}' \
+  | python -c 'import json,sys; print(json.load(sys.stdin)["audit_id"])')
+
+echo "$AUDIT_ID"
+```
+
+The response contains an audit ID and a pending status. Retrieve the current result:
+
+```bash
 curl -sS "http://127.0.0.1:8000/api/audits/${AUDIT_ID}"
 ```
 
-For live progress, use `curl -N "http://127.0.0.1:8000/api/audits/${AUDIT_ID}/events"`. The frontend uses the same endpoint and falls back to status polling if the browser cannot keep an SSE connection.
+Stream live progress:
 
-## Evidence retrieval, analysis, source tiers, and scoring
+```bash
+curl -N "http://127.0.0.1:8000/api/audits/${AUDIT_ID}/events"
+```
+
+Export the result:
+
+```bash
+curl -sS \
+  "http://127.0.0.1:8000/api/audits/${AUDIT_ID}/export?format=json"
+```
+
+For Markdown, replace `format=json` with `format=md`.
+
+Use a public video URL for testing. The example video ID above is illustrative; successful auditing depends on transcript availability and the upstream services.
+
+## Evidence retrieval and scoring
 
 ### Evidence retrieval
 
-Only claims marked `checkable` are sent to retrieval. Queries are created from the normalized claim, entities, numeric information, and domain. Retrieval parses engine responses, rejects empty or irrelevant results, filters some known off-domain results for finance claims, deduplicates by URL/title, and returns no more than five ranked evidence records.
+Only claims marked as checkable are sent to evidence retrieval. Queries are based on the normalized claim, relevant entities, numeric details, and domain.
 
-Ranking prioritizes claim relevance, then a non-empty snippet, then source tier, then scholarly citation count where available. SerpApi responses are cached in SQLite using a deterministic engine/parameter key. API keys are removed from cache-key parameters and are not returned by the API.
+The retrieval pipeline parses engine-specific responses, rejects empty or irrelevant results, filters certain known off-domain results for finance claims, deduplicates by URL or title, and ranks eligible evidence. The pipeline's per-claim evidence limit is enforced in the implementation.
+
+Search routing is claim-aware:
+
+- **Current finance quotes and metrics:** Google Finance, Google News, and Google.
+- **Historical returns, fund studies, fee comparisons, and broader finance assertions:** Google News and Google.
+- **Health claims:** Google Scholar, Google News, and Google.
+- **Other factual claims:** Google News and Google.
+
+The exact routes and eligible result counts are determined by the retrieval implementation. A search-engine response is a candidate source, not proof that a claim is true.
+
+SerpApi responses are cached in SQLite using deterministic keys derived from the engine and request parameters. API keys are excluded from cache-key parameters and are not returned through the application's API.
 
 ### Claim analysis
 
-Claims retain `original_text`, `normalized_text`, `start_seconds`, `end_seconds`, domain, claim type, entities, numeric information, and risk flags. Supported claim types include factual, historical, statistic, comparison, prediction, opinion, advice, and other categories. Predictions, opinions, advice, testimonials, and ambiguous/non-checkable items are not treated as factual checks.
+Claims retain information such as:
 
-The configured LLM is asked for structured JSON. The extraction code validates alignment to transcript segments, preserves original wording, deduplicates similar claims, and rejects unvalidated claims. Hindi and mixed-language claims are normalized to faithful English only when that normalization can be validated.
+- Original transcript wording.
+- Normalized claim text.
+- Start and end timestamps.
+- Domain and claim type.
+- Relevant entities and numeric expressions.
+- Risk flags.
+
+Supported claim categories include factual, historical, statistic, comparison, prediction, opinion, advice, and other categories.
+
+Predictions, opinions, advice, testimonials, and ambiguous or non-checkable statements should not be treated as ordinary factual checks.
+
+The extraction pipeline validates alignment with transcript segments, preserves original wording, deduplicates similar claims, and rejects claims that fail validation. Hindi and mixed-language claims are normalized into English only when the normalization can be validated.
 
 ### Source tiers
 
-The domain list is in [`config/source_tiers.yaml`](./config/source_tiers.yaml):
+Source classifications are configured in `config/source_tiers.yaml`.
 
-- **Tier 1:** regulators, government and health authorities, official filings/exchanges, peer-reviewed journals, recognized archives, and similar primary or authoritative sources;
-- **Tier 2:** established financial/mainstream news outlets and recognized medical/health portals; and
-- **Tier 3:** blogs, forums, social platforms, aggregators, video channels, and unverified websites.
+- **Tier 1:** Regulators, government and health authorities, official filings and exchanges, peer-reviewed journals, recognized archives, and other authoritative primary sources.
+- **Tier 2:** Established financial and mainstream news outlets and recognized medical or health portals.
+- **Tier 3:** Blogs, forums, social platforms, aggregators, video channels, and unverified websites.
 
-The tier is a domain classification, not a guarantee that a page proves a claim. Relevance is evaluated before tier. A `Supported` or `Contradicted` result requires cited Tier 1 or Tier 2 evidence; Tier 3-only support is downgraded to `Mixed` during validation.
+A tier describes the classification of a source's domain; it does not guarantee that the page proves a particular claim. Relevance is assessed separately.
+
+Under the current validation rules, a Supported or Contradicted verdict requires eligible Tier 1 or Tier 2 evidence. Support based only on Tier 3 evidence is downgraded during validation.
 
 ### Verdicts and numeric checks
 
-The scorecard reports verdict counts rather than a single numerical truth score:
+The scorecard reports claim-level verdicts rather than a single numerical truth score.
 
-- `Supported`: relevant evidence confirms the claim;
-- `Contradicted`: relevant evidence directly conflicts with the claim;
-- `Mixed`: evidence conflicts, is partial, covers only some compound events, or does not meet the stronger support rules;
-- `No evidence found`: no relevant indexed evidence survived retrieval and validation; and
-- `Unverifiable`: the claim is a prediction, opinion, advice, testimonial, or other non-checkable statement.
+| Verdict | Meaning |
+|---|---|
+| **Supported** | Retrieved evidence sufficiently supports the claim under the implemented rules. |
+| **Contradicted** | Retrieved evidence directly conflicts with the claim under the implemented rules. |
+| **Mixed** | Evidence is partial, conflicting, covers only part of a compound claim, or fails the stronger support requirements. |
+| **No evidence found** | No relevant evidence survived retrieval and validation. This does not establish that the claim is false. |
+| **Unverifiable** | The statement is a prediction, opinion, advice, testimonial, or another non-checkable claim. |
 
-Confidence is `Low`, `Medium`, or `High`. Numeric checks compare extracted values, units, ranges, and percentages with implementation-defined tolerances, and can provide a direct basis for a supported or contradicted judgment. Evidence IDs in a judgment are validated against the returned evidence list; hallucinated or missing IDs are removed.
+Confidence is reported as Low, Medium, or High.
 
-These labels describe the retrieved material and implemented rules at audit time. They are not a guarantee of truth, completeness, or safety.
+Numeric checks compare extracted values, units, ranges, and percentages when they are meaningfully comparable. Implementation-defined tolerances may affect whether a comparison is considered a match or conflict.
 
-## Example workflow: audit a public YouTube URL
+Evidence IDs are checked against the evidence returned by retrieval. Invalid or missing IDs are removed, and unsupported verdicts are downgraded during validation.
 
-1. Start the server with `uvicorn app.main:app --reload`.
-2. Open <http://127.0.0.1:8000/> and paste a public URL such as `https://www.youtube.com/watch?v=dQw4w9WgXcQ`.
-3. Select **Audit video**. The browser creates an audit, displays live pipeline progress, and recovers by polling if SSE is unavailable.
-4. Review the video metadata, claim timestamps, original quote, English claim, domain/type tags, risk flags, verdict, confidence, rationale, and cited evidence.
-5. Use **Export JSON** or **Export Markdown** after completion.
+All verdicts describe the evidence retrieved and the rules applied at audit time. They are not guarantees of truth, completeness, or safety.
 
-For a terminal-only workflow, submit with the API example above, then request the audit ID until its status is `complete` or `failed`.
+## Example workflow: audit a public YouTube video
+
+1. Start the application using Uvicorn.
+2. Open the local browser interface.
+3. Paste a public YouTube URL and select **Audit video**.
+4. Follow the pipeline progress as metadata, transcript segments, claims, evidence, and judgments are processed.
+5. Review the claim timestamps, original quotations, normalized English text, domain and type labels, risk flags, verdicts, confidence, rationales, and citations.
+6. Export the completed scorecard as JSON or Markdown.
+
+The frontend listens for SSE progress events and falls back to polling when a persistent event connection is unavailable.
+
+For terminal-only usage, submit a video through `POST /api/audits`, save the returned audit ID, and request the audit endpoint until processing is complete or failed.
 
 ## Troubleshooting
 
-- **`python3 -m venv` fails:** install the Ubuntu `python3-venv` package, then recreate the environment.
-- **`ModuleNotFoundError` or `uvicorn: command not found`:** activate `.venv` and run `python -m pip install -r requirements.txt` again.
-- **`GEMINI_API_KEY is not configured`:** confirm `.env` exists in the repository root, contains your local key, and that the server was restarted after editing it. Do not put the key in source code.
-- **`SERPAPI_API_KEY is not configured`:** add a valid local SerpApi key for live requests, or set `DEMO_MODE=1` and use a request already represented in the local cache.
-- **`Transcript unavailable for this video`:** the URL may be private, invalid, unsupported by the upstream response, or missing usable transcript segments.
-- **Demo mode returns “No demo fixture cached”:** demo mode never calls SerpApi and only serves exact cache-key matches. Use a cached fixture/request or disable demo mode for live retrieval.
-- **The browser reports “Service unavailable”:** verify Uvicorn is running on `127.0.0.1:8000`, then check `/api/health` and inspect the server terminal.
-- **An audit remains pending:** request `GET /api/audits/{audit_id}`. The frontend already falls back from SSE to polling; a failed audit includes an `error` field.
-- **Port 8000 is busy:** start Uvicorn on another port, for example `uvicorn app.main:app --reload --port 8001`, then open the matching URL.
-- **JavaScript tests fail before running:** use Node.js 18 or newer and run `node --test web/app.test.mjs` from the repository root. There is no current `package.json`/npm test script.
+**Virtual-environment creation fails**
+
+Install the Ubuntu `python3-venv` package and retry.
+
+**`ModuleNotFoundError` or `uvicorn: command not found`**
+
+Activate `.venv` and install the requirements again:
+
+```bash
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+**Gemini key is missing**
+
+Check that `.env` exists in the repository root, contains your local key, and that you restarted the server after editing it. Never put the key in source code.
+
+**SerpApi key is missing**
+
+Add a valid key to `.env` for live requests, or use `DEMO_MODE=1` with an exact matching cached request.
+
+**Transcript unavailable**
+
+The video may be private, invalid, unsupported by the upstream response, or missing usable transcript segments.
+
+**No demo fixture is cached**
+
+Demo mode does not call SerpApi. Use a request represented by a matching cached response or disable demo mode for live retrieval.
+
+**Browser reports service unavailable**
+
+Verify that Uvicorn is running on the port in the browser URL. Check `/api/health` and inspect the server terminal.
+
+**Audit remains pending**
+
+Request `GET /api/audits/{audit_id}` to check its status. The frontend uses polling if SSE is unavailable. A failed audit may include an error field.
+
+**Port 8000 is busy**
+
+Run Uvicorn on another port:
+
+```bash
+uvicorn app.main:app --reload --port 8011
+```
+
+Then open http://127.0.0.1:8011/.
+
+**JavaScript tests fail before running**
+
+Install Node.js 18 or newer and run the tests from the repository root:
+
+```bash
+node --test web/app.test.mjs
+```
+
+The current frontend does not require a `package.json` or an npm test script.
 
 ## Security, privacy, and responsible use
 
 - Keep `.env` private. Never commit API keys, passwords, or real credentials.
-- The server enables permissive CORS (`*`) and is intended for local/development use; add authentication, restrictive origins, rate limiting, and production deployment controls before exposing it publicly.
-- The application stores audit payloads, claims, and provider/search caches in the configured SQLite database. Choose `AUDITOR_DB_PATH` deliberately and protect the database file.
+- Rotate any credential that may have been exposed. Removing a credential from the latest version does not make an exposed credential safe to reuse.
+- The server currently enables permissive CORS (`*`) and is intended for local or development use. Add authentication, restrictive origins, rate limiting, and production deployment controls before exposing it publicly.
+- Audit payloads, claims, and provider/search caches may be stored in SQLite. Configure `AUDITOR_DB_PATH` deliberately and protect the database file.
 - External video metadata, transcripts, and search requests may be sent to YouTube/SerpApi and configured Gemini services. Avoid submitting private or sensitive material.
 - Retrieved snippets and verdicts may be incomplete, stale, incorrectly interpreted, or wrong. A missing citation is not proof that a claim is false.
-- This project is not financial or medical advice. Use qualified financial and medical professionals for decisions, diagnosis, or treatment.
+- This project is not financial or medical advice. Consult qualified financial and medical professionals for decisions, diagnosis, or treatment.
 - Do not use the output to harass creators, infer character or intent, or make high-impact decisions about people. The implemented analysis is claim-focused.
 
-## Current limitations and future improvements
+## Limitations and future work
 
-Current limitations visible in the implementation include:
+### Current limitations
 
-- live data quality depends on SerpApi coverage, transcript availability, source snippets, and Gemini availability;
-- source tiers classify domains and do not independently verify page content;
-- only the configured Gemini provider is supported;
-- the process-local SSE queue is not a durable distributed job system;
-- the frontend is a lightweight static UI and the backend currently has permissive CORS with no authentication;
-- the Markdown export is intentionally compact and does not include the full evidence payload; and
-- the repository does not currently provide a package manager script for frontend testing or a production deployment configuration.
+- Live data quality depends on SerpApi coverage, transcript availability, source snippets, and Gemini availability.
+- Source tiers classify domains and do not independently verify page content.
+- Only the configured Gemini provider is supported.
+- The process-local SSE queue is not a durable distributed job system.
+- The frontend is a lightweight static interface.
+- The backend currently has permissive CORS and no authentication.
+- Markdown exports are intentionally compact and do not contain the complete evidence payload.
+- The repository does not currently provide a frontend package-manager script or a production deployment configuration.
+- Language coverage and transcript normalization depend on the available data and validation success.
+- Search results may not include every relevant source, and a lack of indexed evidence must not be interpreted as proof of falsity.
 
-Potential future improvements are stronger authentication and deployment controls, durable job processing, richer evidence snapshots, more provider options, broader transcript/language coverage, direct page-content verification, configurable tier policies, and expanded evaluation against fresh real-world videos. These are not currently implemented.
+### Potential future improvements
+
+- Authentication and stronger deployment controls.
+- Durable background-job processing and scalable progress delivery.
+- Richer evidence snapshots and direct page-content verification.
+- Additional LLM providers and configurable provider selection.
+- Broader transcript and language coverage.
+- Configurable source-tier policies.
+- Expanded evaluation against fresh real-world videos.
+- Improved evidence quality measurement and reproducible audit reports.
+
+These improvements are potential future work and should not be considered implemented features.
 
 ## License
 
-See [`LICENSE`](./LICENSE).
+See [LICENSE](LICENSE) for the project's licensing terms.
